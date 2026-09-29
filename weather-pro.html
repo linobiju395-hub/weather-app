@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weather</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#eef2f7;--card:#fff;--ink:#14243b;--mute:#6b7a90;--line:#e2e8f0;--accent:#2f6fdb;--soft:#f4f7fb}
+  *{box-sizing:border-box;margin:0}
+  body{font-family:Manrope,system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px}
+  .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+  .brand{font-weight:800;font-size:1.25rem;margin-right:auto}
+  .search{display:flex;gap:8px;flex:1 1 320px;max-width:460px}
+  input{flex:1;min-width:0;padding:12px 16px;border-radius:12px;border:1px solid var(--line);background:var(--card);font:inherit;color:var(--ink)}
+  button{font:inherit;cursor:pointer;border:0;border-radius:12px}
+  .go{background:var(--ink);color:#fff;padding:0 20px;font-weight:700}
+  .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px}
+  .seg button{background:none;color:var(--mute);padding:8px 14px;border-radius:9px;font-weight:700}
+  .seg button[aria-pressed=true]{background:var(--accent);color:#fff}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .layout{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start}
+  .col{display:grid;gap:18px}
+  .card{background:var(--card);border-radius:20px;padding:22px;border:1px solid var(--line)}
+  .card h2{font-size:1rem;font-weight:700;margin-bottom:14px}
+  .hero{border-radius:28px;padding:30px;color:#fff;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(150deg,#2f6fdb,#6db3f2)}
+  .hero.night{background:linear-gradient(150deg,#101f45,#2e4a8a)}
+  .hero.cloud{background:linear-gradient(150deg,#4d6178,#8fa2b8)}
+  .hero.rain{background:linear-gradient(150deg,#26364d,#55708c)}
+  .hero.snow{background:linear-gradient(150deg,#7f97b3,#c9d8e8);color:#14243b}
+  .place{font-size:1.6rem;font-weight:800}
+  .date{opacity:.85;margin-top:2px}
+  .temp{font-size:6.5rem;font-weight:800;line-height:1;letter-spacing:-4px;margin-top:26px}
+  .side{text-align:right;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end}
+  .side img{width:96px;height:96px;margin:-10px -10px 0 0}
+  .cond{font-size:1.15rem;font-weight:700}
+  .sub{opacity:.9;line-height:1.7;margin-top:8px}
+  .curve{width:100%;height:auto;display:block;overflow:visible}
+  .curve text{fill:var(--mute);font-size:12px;font-family:inherit}
+  .curve .v{fill:var(--ink);font-weight:700}
+  .day{display:grid;grid-template-columns:1fr 48px 110px;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .day:last-child{border:0;padding-bottom:0}
+  .day img{width:44px;height:44px}
+  .day .r{text-align:right;font-weight:700}
+  .lo{color:var(--mute);font-weight:500}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stat{background:var(--soft);border-radius:14px;padding:14px}
+  .stat span{display:block;color:var(--mute);font-size:.85rem}
+  .stat b{font-size:1.3rem;font-weight:700}
+  .city{width:100%;display:grid;grid-template-columns:1fr 40px auto;align-items:center;gap:8px;background:none;text-align:left;padding:8px 10px;border-radius:12px;color:var(--ink)}
+  .city:hover{background:var(--soft)}
+  .city.on{background:var(--soft);box-shadow:inset 3px 0 0 var(--accent)}
+  .city img{width:38px;height:38px}
+  .city small{display:block;color:var(--mute);font-weight:500}
+  .msg{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:50px 20px;text-align:center;line-height:1.6}
+  @media (max-width:820px){.layout{grid-template-columns:1fr}.temp{font-size:5rem}.hero{padding:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">Weather</div>
+    <form class="search" id="f">
+      <input id="q" type="search" placeholder="Search for a city" aria-label="City name" autocomplete="off">
+      <button class="go" type="submit">Search</button>
+    </form>
+    <div class="seg" role="group" aria-label="Units">
+      <button data-u="c" aria-pressed="true">°C</button>
+      <button data-u="f" aria-pressed="false">°F</button>
+    </div>
+  </header>
+  <div id="app"><div class="msg">Loading weather…</div></div>
+</div>
+<script>
+// ---- Configuration ---------------------------------------------------
+const KEY = "e081756f27654a7ea71104112262909";
+const BASE = "https://api.weatherapi.com/v1";
+const DEFAULT_CITY = "Dubai";                 // shown when the app opens
+const CITIES = ["Dubai", "Abu Dhabi", "London", "New York", "Tokyo"];
+const DAYS = 3;                               // free plan maximum
+// ----------------------------------------------------------------------
+let metric = true, data = null, cities = [], active = DEFAULT_CITY;
+try { metric = localStorage.getItem("wx-unit") !== "f"; } catch (e) {}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const T = (c, f) => Math.round(metric ? c : f) + "°";
+const icon = s => "https:" + s.replace("64x64", "128x128");
+
+async function api(endpoint, params) {
+  const qs = new URLSearchParams({ key: KEY, ...params });
+  const res = await fetch(`${BASE}/${endpoint}.json?${qs}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error ? json.error.message : "Request failed");
+  return json;
+}
+
+async function load(city) {
+  $("app").innerHTML = '<div class="msg">Loading weather…</div>';
+  try {
+    data = await api("forecast", { q: city, days: DAYS, aqi: "no", alerts: "no" });
+    active = city;
+    render();
+    loadCities();
+  } catch (err) {
+    $("app").innerHTML = err instanceof TypeError
+      ? '<div class="msg"><b>Couldn’t reach the weather service.</b><br>Open this file directly in your browser and check that nothing is blocking api.weatherapi.com.</div>'
+      : `<div class="msg"><b>Couldn’t load weather.</b><br>${esc(err.message)}<br>Check the city name and try again.</div>`;
+  }
+}
+
+async function loadCities() {
+  const res = await Promise.allSettled(CITIES.map(c => api("current", { q: c })));
+  cities = res.map((r, i) => r.status === "fulfilled" ? { name: CITIES[i], ...r.value.current } : null).filter(Boolean);
+  const el = $("cities");
+  if (el) el.innerHTML = cityList();
+}
+
+function cityList() {
+  return cities.map(c => `
+    <button class="city ${c.name.toLowerCase() === active.toLowerCase() ? "on" : ""}" data-city="${esc(c.name)}">
+      <span><b>${esc(c.name)}</b><small>${esc(c.condition.text)}</small></span>
+      <img src="${icon(c.condition.icon)}" alt=""><b>${T(c.temp_c, c.temp_f)}</b>
+    </button>`).join("");
+}
+
+function skyClass(c) {
+  const s = c.condition.text.toLowerCase();
+  if (/snow|sleet|blizzard|ice/.test(s)) return "snow";
+  if (/rain|drizzle|thunder|shower/.test(s)) return "rain";
+  if (!c.is_day) return "night";
+  if (/cloud|overcast|mist|fog/.test(s)) return "cloud";
+  return "";
+}
+
+function curve(hs) {
+  const v = hs.map(h => metric ? h.temp_c : h.temp_f);
+  const W = 640, H = 180, px = 30, top = 36, bot = 40;
+  const mn = Math.min(...v), mx = Math.max(...v), rg = (mx - mn) || 1;
+  const p = v.map((t, i) => [px + i * (W - 2 * px) / (v.length - 1), top + (mx - t) / rg * (H - top - bot)]);
+  let d = `M${p[0][0]} ${p[0][1]}`;
+  for (let i = 1; i < p.length; i++) {
+    const m = (p[i - 1][0] + p[i][0]) / 2;
+    d += ` C${m} ${p[i - 1][1]} ${m} ${p[i][1]} ${p[i][0]} ${p[i][1]}`;
+  }
+  const base = H - bot + 10;
+  return `<svg class="curve" viewBox="0 0 ${W} ${H}" role="img" aria-label="Temperature over the next hours">
+    <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f6fdb" stop-opacity=".25"/><stop offset="1" stop-color="#2f6fdb" stop-opacity="0"/></linearGradient></defs>
+    <path d="${d} L${p.at(-1)[0]} ${base} L${p[0][0]} ${base} Z" fill="url(#g)"/>
+    <path d="${d}" fill="none" stroke="#2f6fdb" stroke-width="3" stroke-linecap="round"/>
+    ${p.map((q, i) => `<circle cx="${q[0]}" cy="${q[1]}" r="4.5" fill="#fff" stroke="#2f6fdb" stroke-width="2.5"/>
+      <text class="v" x="${q[0]}" y="${q[1] - 12}" text-anchor="middle">${Math.round(v[i])}°</text>
+      <text x="${q[0]}" y="${H - 8}" text-anchor="middle">${hs[i].time.split(" ")[1]}</text>`).join("")}
+  </svg>`;
+}
+
+function render() {
+  const { location: l, current: c, forecast } = data;
+  const today = forecast.forecastday[0];
+  const when = new Date(l.localtime.replace(" ", "T"));
+  const dateStr = when.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const hrs = forecast.forecastday.flatMap(d => d.hour)
+    .filter(h => h.time_epoch >= l.localtime_epoch - 3600)
+    .filter((h, i) => i % 2 === 0).slice(0, 8);
+  const wind = metric ? Math.round(c.wind_kph) + " km/h" : Math.round(c.wind_mph) + " mph";
+  const vis = metric ? c.vis_km + " km" : c.vis_miles + " mi";
+  const dn = (d, i) => i === 0 ? "Today" : new Date(d + "T12:00").toLocaleDateString(undefined, { weekday: "long" });
+
+  $("app").innerHTML = `
+  <div class="layout">
+    <div class="col">
+      <section class="hero ${skyClass(c)}">
+        <div>
+          <div class="place">${esc(l.name)}, ${esc(l.country)}</div>
+          <div class="date">${dateStr}, ${l.localtime.split(" ")[1]}</div>
+          <div class="temp">${T(c.temp_c, c.temp_f)}</div>
+        </div>
+        <div class="side">
+          <img src="${icon(c.condition.icon)}" alt="">
+          <div>
+            <div class="cond">${esc(c.condition.text)}</div>
+            <div class="sub">High ${T(today.day.maxtemp_c, today.day.maxtemp_f)}, low ${T(today.day.mintemp_c, today.day.mintemp_f)}<br>Feels like ${T(c.feelslike_c, c.feelslike_f)}</div>
+          </div>
+        </div>
+      </section>
+      <section class="card"><h2>Temperature over the next hours</h2>${curve(hrs)}</section>
+      <section class="card"><h2>${forecast.forecastday.length}-day forecast</h2>
+        ${forecast.forecastday.map((d, i) => `
+        <div class="day"><span>${dn(d.date, i)}</span><img src="${icon(d.day.condition.icon)}" alt="${esc(d.day.condition.text)}">
+        <span class="r">${T(d.day.maxtemp_c, d.day.maxtemp_f)} <span class="lo">${T(d.day.mintemp_c, d.day.mintemp_f)}</span></span></div>`).join("")}
+      </section>
+    </div>
+    <div class="col">
+      <section class="card"><h2>Conditions</h2>
+        <div class="stats">
+          <div class="stat"><span>Humidity</span><b>${c.humidity}%</b></div>
+          <div class="stat"><span>Wind</span><b>${wind}</b></div>
+          <div class="stat"><span>UV index</span><b>${c.uv}</b></div>
+          <div class="stat"><span>Pressure</span><b>${Math.round(c.pressure_mb)} hPa</b></div>
+          <div class="stat"><span>Visibility</span><b>${vis}</b></div>
+          <div class="stat"><span>Chance of rain</span><b>${today.day.daily_chance_of_rain}%</b></div>
+          <div class="stat"><span>Sunrise</span><b>${today.astro.sunrise}</b></div>
+          <div class="stat"><span>Sunset</span><b>${today.astro.sunset}</b></div>
+        </div>
+      </section>
+      <section class="card"><h2>Other cities</h2><div id="cities">${cityList()}</div></section>
+    </div>
+  </div>`;
+}
+
+$("f").addEventListener("submit", e => {
+  e.preventDefault();
+  const v = $("q").value.trim();
+  if (v) load(v);
+});
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-city]");
+  if (c) { $("q").value = ""; load(c.dataset.city); }
+  const u = e.target.closest("[data-u]");
+  if (u) {
+    metric = u.dataset.u === "c";
+    try { localStorage.setItem("wx-unit", metric ? "c" : "f"); } catch (err) {}
+    syncUnits();
+    if (data) render();
+  }
+});
+function syncUnits() {
+  document.querySelectorAll("[data-u]").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.u === "c") === metric)));
+}
+syncUnits();
+load(DEFAULT_CITY);
+</script>
+</body>
+</html>
